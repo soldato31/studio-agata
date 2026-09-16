@@ -241,6 +241,9 @@ input[type="date"]{
   line-height:1.2;
 }
 .stat-tile .stat-label{font-size:11px;color:var(--text-muted);margin-top:1px;}
+#statsStrip .stat-tile{cursor:pointer;transition:border-color .15s,transform .1s;text-align:left;}
+#statsStrip .stat-tile:hover{border-color:var(--accent);}
+#statsStrip .stat-tile:active{transform:scale(.98);}
 
 /* ---------- day agenda (mobile) ---------- */
 #dayAgenda{display:none;}
@@ -594,13 +597,13 @@ input[type="date"]{
   border-radius:10px;padding:10px 14px;margin-bottom:18px;line-height:1.5;
 }
 .subtabbar{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
-.subtab-btn{
+.subtab-btn, .im-subtab-btn{
   border:1px solid var(--border);background:var(--surface);color:var(--text-muted);
   padding:7px 14px;border-radius:99px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;
 }
-.subtab-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
-.admin-panel{display:none;}
-.admin-panel.active{display:block;}
+.subtab-btn.active, .im-subtab-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
+.admin-panel, .im-panel{display:none;}
+.admin-panel.active, .im-panel.active{display:block;}
 .admin-card{
   background:var(--surface);border:1px solid var(--border);border-radius:12px;
   padding:18px 20px;margin-bottom:18px;
@@ -766,6 +769,7 @@ input[type="date"]{
     <button class="tab-btn" data-tab="anagrafica">Anagrafica</button>
     <button class="tab-btn" data-tab="report">Report</button>
     <button class="tab-btn" data-tab="admin">Amministrazione</button>
+    <button class="tab-btn" data-tab="im">IM</button>
   </nav>
 
   <div class="status-banner" id="statusBanner"></div>
@@ -950,6 +954,118 @@ input[type="date"]{
       </div>
     </div>
   </section>
+
+  <section id="imView" hidden>
+    <div class="admin-note">
+      Messaggi rapidi per i pazienti: rinnovi pacchetto, promemoria appuntamento e promozioni via WhatsApp o email. L'app prepara sempre il testo e individua il momento giusto: l'invio resta un tocco tuo, così hai sempre il controllo su cosa e quando parte (l'invio automatico "silenzioso" in background richiederebbe un servizio a pagamento esterno, che non è stato attivato).
+    </div>
+    <div class="subtabbar">
+      <button type="button" class="im-subtab-btn active" data-imsubtab="queue">Da inviare</button>
+      <button type="button" class="im-subtab-btn" data-imsubtab="broadcast">Promozioni</button>
+      <button type="button" class="im-subtab-btn" data-imsubtab="settings">Impostazioni</button>
+    </div>
+
+    <div class="im-panel active" id="panelImQueue">
+      <div class="admin-card">
+        <h3>Rinnovi pacchetto in scadenza</h3>
+        <p class="field-hint" style="margin:-6px 0 12px;">Pazienti alla penultima/ultima seduta del pacchetto attivo, non ancora avvisati per questo rinnovo.</p>
+        <div id="imRenewalList"></div>
+      </div>
+      <div class="admin-card">
+        <h3>Promemoria appuntamenti di oggi</h3>
+        <p class="field-hint" style="margin:-6px 0 12px;">Appuntamenti entro <span id="imLeadLabel">60</span> minuti da adesso: chiedi conferma di presenza con un tocco.</p>
+        <div id="imReminderList"></div>
+      </div>
+    </div>
+
+    <div class="im-panel" id="panelImBroadcast">
+      <div class="admin-card">
+        <div class="admin-toolbar">
+          <h3 style="margin:0;">Messaggi con immagini promozionali</h3>
+          <button type="button" class="btn btn-primary btn-small" id="newBroadcastBtn">+ Nuovo messaggio</button>
+        </div>
+        <p class="field-hint" style="margin:-6px 0 14px;">Crea un messaggio "madre" con testo e immagini una sola volta, poi scegli a chi inviarlo.</p>
+        <div id="broadcastList" class="promo-list"></div>
+      </div>
+    </div>
+
+    <div class="im-panel" id="panelImSettings">
+      <div class="admin-card">
+        <h3>Modelli di messaggio</h3>
+        <form id="imSettingsForm">
+          <div class="field">
+            <label for="imLeadMinutes">Anticipo promemoria appuntamento</label>
+            <select id="imLeadMinutes" class="status-select" style="width:100%;">
+              <option value="30">30 minuti prima</option>
+              <option value="60">60 minuti prima</option>
+              <option value="90">90 minuti prima</option>
+              <option value="120">120 minuti prima</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="imTplRenewal">Messaggio di rinnovo pacchetto</label>
+            <textarea id="imTplRenewal" rows="3"></textarea>
+            <p class="field-hint">Segnaposto disponibili: {{nome}}, {{pacchetto}}, {{rimanenti}}, {{studio}}</p>
+          </div>
+          <div class="field">
+            <label for="imTplReminder">Messaggio di promemoria appuntamento</label>
+            <textarea id="imTplReminder" rows="3"></textarea>
+            <p class="field-hint">Segnaposto disponibili: {{nome}}, {{data}}, {{ora}}, {{studio}}</p>
+          </div>
+          <button type="submit" class="btn btn-primary">Salva impostazioni</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ================= broadcast modal ================= -->
+<div class="modal-overlay" id="broadcastModalOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2 id="broadcastModalTitle">Nuovo messaggio</h2>
+    <form id="broadcastForm">
+      <div class="field"><label for="bcTitle">Titolo (solo per te, non viene inviato)</label><input type="text" id="bcTitle" required placeholder="Es. Promo autunno 2026"></div>
+      <div class="field"><label for="bcSelectPromo">Precompila da una promozione salvata (opzionale)</label>
+        <select id="bcSelectPromo" class="status-select" style="width:100%;"><option value="">— nessuna —</option></select>
+      </div>
+      <div class="field"><label for="bcMessage">Testo del messaggio</label><textarea id="bcMessage" rows="4" required placeholder="Il testo proposto su WhatsApp/email"></textarea></div>
+      <div class="field">
+        <label>Immagini (max 3)</label>
+        <div id="bcPhotosWrap" class="training-photos-mini" style="margin-bottom:8px;min-height:0;"></div>
+        <button type="button" class="btn btn-ghost btn-small" id="bcAddPhotoBtn">+ Aggiungi immagine</button>
+        <input type="file" id="bcPhotoInput" accept="image/*" hidden>
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Salva messaggio</button>
+        <button type="button" class="btn btn-ghost" id="bcCancelBtn">Annulla</button>
+        <button type="button" class="btn btn-danger" id="bcDeleteBtn" style="display:none;">Elimina</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= broadcast send overlay ================= -->
+<div class="modal-overlay" id="broadcastSendOverlay" hidden>
+  <div class="modal" style="max-width:640px;" role="dialog" aria-modal="true">
+    <h2>Invia messaggio</h2>
+    <p class="field-hint" id="broadcastSendHint"></p>
+    <input type="text" id="broadcastSendSearch" placeholder="Cerca paziente&hellip;" style="width:100%;margin-bottom:10px;">
+    <div id="broadcastSendList" style="max-height:50vh;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="broadcastSendCloseBtn">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= stats drilldown ================= -->
+<div class="modal-overlay" id="statsDrilldownOverlay" hidden>
+  <div class="modal" style="max-width:640px;" role="dialog" aria-modal="true">
+    <h2 id="statsDrilldownTitle"></h2>
+    <div id="statsDrilldownList" style="max-height:55vh;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="statsDrilldownCloseBtn">Chiudi</button>
+    </div>
+  </div>
 </div>
 
 <!-- ================= promo modal ================= -->
@@ -1748,7 +1864,9 @@ input[type="date"]{
   const collaborations=new Map(); // id -> collaboration data
   const expenses=new Map();       // id -> {description, amount, date}
   const promotions=new Map();     // id -> promo data
+  const broadcasts=new Map();     // id -> broadcast data (title, message, images[])
   let studioSettings={};          // singleton settings/studio doc
+  let messagingSettings={};       // singleton settings/messaging doc (IM)
   function keyFor(date,time){ return date+"_"+time.replace(":",""); }
   function rebuildPatientsByName(){
     patientsByName.clear();
@@ -1798,6 +1916,7 @@ input[type="date"]{
       });
       renderWeek();
       renderAnagrafica();
+      renderImQueues();
     }, function(err){
       showBanner("Impossibile sincronizzare l'agenda in questo momento (" + (err && err.code || "errore") + ").");
     });
@@ -1810,6 +1929,7 @@ input[type="date"]{
       refreshPatientDatalist();
       renderWeek();
       renderAnagrafica();
+      renderImQueues();
     }, function(err){
       showBanner("Impossibile sincronizzare l'anagrafica in questo momento (" + (err && err.code || "errore") + ").");
     });
@@ -1866,6 +1986,20 @@ input[type="date"]{
     }, function(err){
       showBanner("Impossibile sincronizzare le promozioni in questo momento (" + (err && err.code || "errore") + ").");
     });
+    db.collection("broadcasts").onSnapshot(function(snap){
+      snap.docChanges().forEach(function(ch){
+        if(ch.type==="removed"){ broadcasts.delete(ch.doc.id); }
+        else { broadcasts.set(ch.doc.id, ch.doc.data()); }
+      });
+      renderBroadcastList();
+    }, function(err){
+      showBanner("Impossibile sincronizzare i messaggi in questo momento (" + (err && err.code || "errore") + ").");
+    });
+    db.collection("settings").doc("messaging").onSnapshot(function(doc){
+      messagingSettings = (doc && doc.exists && doc.data()) || {};
+      fillImSettingsForm();
+      renderImQueues();
+    }, function(err){ /* impostazioni facoltative, fallisce in silenzio */ });
   }
 
   function getLinkedPatient(data){
@@ -1889,9 +2023,11 @@ input[type="date"]{
       document.getElementById("anagraficaView").hidden = tab!=="anagrafica";
       document.getElementById("reportView").hidden = tab!=="report";
       document.getElementById("adminView").hidden = tab!=="admin";
+      document.getElementById("imView").hidden = tab!=="im";
       if(tab==="anagrafica") renderAnagrafica();
       if(tab==="admin"){ renderPriceListTable(); renderInvoiceTable(); refreshPriceListDatalist(); renderCollabTable(); renderPromoList(); }
       if(tab==="report") renderReport();
+      if(tab==="im"){ renderImQueues(); renderBroadcastList(); fillImSettingsForm(); }
     });
   });
 
@@ -1903,6 +2039,21 @@ input[type="date"]{
       btn.classList.add("active");
       document.querySelectorAll(".admin-panel").forEach(function(p){ p.classList.remove("active"); });
       document.getElementById("panel"+btn.dataset.subtab.charAt(0).toUpperCase()+btn.dataset.subtab.slice(1)).classList.add("active");
+    });
+  });
+
+  // ---------- IM subtabs ----------
+  const imSubtabBtns=document.querySelectorAll(".im-subtab-btn");
+  const imPanelMap={queue:"panelImQueue", broadcast:"panelImBroadcast", settings:"panelImSettings"};
+  imSubtabBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      imSubtabBtns.forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      document.querySelectorAll(".im-panel").forEach(function(p){ p.classList.remove("active"); });
+      const id=imPanelMap[btn.dataset.imsubtab];
+      if(id) document.getElementById(id).classList.add("active");
+      if(btn.dataset.imsubtab==="broadcast") renderBroadcastList();
+      if(btn.dataset.imsubtab==="settings") fillImSettingsForm();
     });
   });
 
@@ -1947,15 +2098,87 @@ input[type="date"]{
       }
     });
     const tiles=[
-      {n:todayCount, l:todayCount===1?"appuntamento oggi":"appuntamenti oggi"},
-      {n:weekTotal, l:weekTotal===1?"appuntamento questa settimana":"appuntamenti questa settimana"},
-      {n:activePatients, l:activePatients===1?"paziente attivo":"pazienti attivi"},
-      {n:endingPackages, l:endingPackages===1?"pacchetto in esaurimento":"pacchetti in esaurimento"}
+      {n:todayCount, l:todayCount===1?"appuntamento oggi":"appuntamenti oggi", kind:"today"},
+      {n:weekTotal, l:weekTotal===1?"appuntamento questa settimana":"appuntamenti questa settimana", kind:"week"},
+      {n:activePatients, l:activePatients===1?"paziente attivo":"pazienti attivi", kind:"activePatients"},
+      {n:endingPackages, l:endingPackages===1?"pacchetto in esaurimento":"pacchetti in esaurimento", kind:"endingPackages"}
     ];
     strip.innerHTML = tiles.map(function(t){
-      return '<div class="stat-tile"><div class="stat-num">'+t.n+'</div><div class="stat-label">'+t.l+'</div></div>';
+      return '<div class="stat-tile" data-stat-kind="'+t.kind+'" tabindex="0" role="button"><div class="stat-num">'+t.n+'</div><div class="stat-label">'+t.l+'</div></div>';
     }).join("");
   }
+  const statsStripEl=document.getElementById("statsStrip");
+  if(statsStripEl){
+    statsStripEl.addEventListener("click", function(e){
+      const tile=e.target.closest("[data-stat-kind]");
+      if(tile) openStatsDrilldown(tile.dataset.statKind);
+    });
+    statsStripEl.addEventListener("keydown", function(e){
+      if(e.key!=="Enter" && e.key!==" ") return;
+      const tile=e.target.closest("[data-stat-kind]");
+      if(tile){ e.preventDefault(); openStatsDrilldown(tile.dataset.statKind); }
+    });
+  }
+  function openStatsDrilldown(kind){
+    const titleEl=document.getElementById("statsDrilldownTitle");
+    const listEl=document.getElementById("statsDrilldownList");
+    const todayIso=isoDate(new Date());
+    let title="", rows=[];
+    if(kind==="today"){
+      title="Appuntamenti di oggi";
+      appts.forEach(function(a){ if(a.date===todayIso) rows.push(a); });
+      rows.sort(function(a,b){ return (a.time||"").localeCompare(b.time||""); });
+      listEl.innerHTML = rows.length ? rows.map(function(a){
+        return '<div class="reminder-row"><div class="rr-head"><span class="rr-who">'+escapeHtml(a.patientName||"")+'</span><span class="rr-when">'+(a.time||"")+(a.activityType?" · "+escapeHtml(a.activityType):"")+'</span></div></div>';
+      }).join("") : '<div class="reminder-empty">Nessun appuntamento oggi.</div>';
+    } else if(kind==="week"){
+      title="Appuntamenti di questa settimana";
+      const w=weeks[currentWeek];
+      const weekStart=isoDate(w.monday), weekEnd=isoDate(w.days[5]);
+      appts.forEach(function(a){ if(a.date>=weekStart && a.date<=weekEnd) rows.push(a); });
+      rows.sort(function(a,b){ return (a.date+a.time).localeCompare(b.date+b.time); });
+      listEl.innerHTML = rows.length ? rows.map(function(a){
+        const d=new Date(a.date+"T00:00:00");
+        return '<div class="reminder-row"><div class="rr-head"><span class="rr-who">'+escapeHtml(a.patientName||"")+'</span><span class="rr-when">'+shortDate(d)+" · "+(a.time||"")+'</span></div></div>';
+      }).join("") : '<div class="reminder-empty">Nessun appuntamento in questa settimana.</div>';
+    } else if(kind==="activePatients"){
+      title="Pazienti attivi";
+      const list=[];
+      patients.forEach(function(p){ if((p.status||"attivo")==="attivo") list.push(p); });
+      list.sort(function(a,b){ return (a.fullName||"").localeCompare(b.fullName||""); });
+      listEl.innerHTML = list.length ? list.map(function(p){
+        const pkg=p.package;
+        const pkgTxt=(pkg && pkg.sessionsTotal) ? (Math.max(0,pkg.sessionsTotal-(pkg.sessionsUsed||0))+"/"+pkg.sessionsTotal+" sedute rimanenti") : "Nessun pacchetto attivo";
+        return '<div class="reminder-row"><div class="rr-head"><span class="rr-who">'+escapeHtml(p.fullName||"")+'</span><span class="rr-when">'+escapeHtml(pkgTxt)+'</span></div></div>';
+      }).join("") : '<div class="reminder-empty">Nessun paziente attivo.</div>';
+    } else if(kind==="endingPackages"){
+      title="Pacchetti in esaurimento";
+      const list=[];
+      patients.forEach(function(p,id){
+        const pkg=p.package;
+        if(pkg && pkg.sessionsTotal){
+          const remaining=pkg.sessionsTotal-(pkg.sessionsUsed||0);
+          if(remaining>0 && remaining<=2) list.push({id:id,p:p,remaining:remaining});
+        }
+      });
+      list.sort(function(a,b){ return a.remaining-b.remaining; });
+      listEl.innerHTML = list.length ? list.map(function(r){
+        return '<div class="reminder-row"><div class="rr-head"><span class="rr-who">'+escapeHtml(r.p.fullName||"")+'</span><span class="rr-when">'+r.remaining+' sedut'+(r.remaining===1?"a":"e")+' rimaste</span></div>'+
+          '<div class="rr-actions"><button type="button" class="btn btn-ghost btn-small" data-goto-im="1">Vai a IM &rarr; Da inviare</button></div></div>';
+      }).join("") : '<div class="reminder-empty">Nessun pacchetto in esaurimento.</div>';
+      listEl.querySelectorAll("[data-goto-im]").forEach(function(b){
+        b.addEventListener("click", function(){
+          document.getElementById("statsDrilldownOverlay").hidden=true;
+          const imTabBtn=document.querySelector('.tab-btn[data-tab="im"]');
+          if(imTabBtn) imTabBtn.click();
+        });
+      });
+    }
+    titleEl.textContent=title;
+    document.getElementById("statsDrilldownOverlay").hidden=false;
+  }
+  document.getElementById("statsDrilldownCloseBtn").addEventListener("click", function(){ document.getElementById("statsDrilldownOverlay").hidden=true; });
+  document.getElementById("statsDrilldownOverlay").addEventListener("click", function(e){ if(e.target===e.currentTarget) e.currentTarget.hidden=true; });
 
   function renderDayAgenda(){
     const w=weeks[currentWeek];
@@ -2178,14 +2401,36 @@ input[type="date"]{
         }).join("")
       : '<div class="notif-empty">Nessuna notifica al momento.</div>';
   }
+  function positionNotifPanel(){
+    const panel=document.getElementById("notifPanel");
+    const btn=document.getElementById("notifBtn");
+    if(!panel || !btn) return;
+    if(window.innerWidth<=640){
+      const r=btn.getBoundingClientRect();
+      panel.style.position="fixed";
+      panel.style.top=Math.round(r.bottom+8)+"px";
+      panel.style.left="50%";
+      panel.style.right="auto";
+      panel.style.transform="translateX(-50%)";
+      panel.style.width="min(92vw, 360px)";
+    } else {
+      panel.style.position=""; panel.style.top=""; panel.style.left=""; panel.style.right=""; panel.style.transform=""; panel.style.width="";
+    }
+  }
   document.getElementById("notifBtn").addEventListener("click", function(e){
     e.stopPropagation();
     const panel=document.getElementById("notifPanel");
+    const willShow=panel.hidden;
     panel.hidden = !panel.hidden;
+    if(willShow) positionNotifPanel();
   });
   document.addEventListener("click", function(e){
     const panel=document.getElementById("notifPanel");
     if(!panel.hidden && !e.target.closest("#notifPanel") && !e.target.closest("#notifBtn")) panel.hidden=true;
+  });
+  window.addEventListener("resize", function(){
+    const panel=document.getElementById("notifPanel");
+    if(panel && !panel.hidden) positionNotifPanel();
   });
 
   // ---------- promemoria di domani (WhatsApp / SMS / email) ----------
@@ -2230,6 +2475,340 @@ input[type="date"]{
   });
   document.getElementById("reminderCloseBtn").addEventListener("click", function(){ document.getElementById("reminderOverlay").hidden=true; });
   document.getElementById("reminderOverlay").addEventListener("click", function(e){ if(e.target.id==="reminderOverlay") e.currentTarget.hidden=true; });
+
+  // ---------- IM (Instant Messages): rinnovi, promemoria appuntamento, promozioni ----------
+  function imDefaultTplRenewal(){
+    return "Gentile {{nome}}, il tuo pacchetto \"{{pacchetto}}\" sta per terminare ({{rimanenti}} sedute rimanenti). Scrivimi per organizzare il rinnovo e continuare il percorso senza interruzioni. A presto, {{studio}}.";
+  }
+  function imDefaultTplReminder(){
+    return "Gentile {{nome}}, ti ricordo l'appuntamento di oggi alle ore {{ora}}. Confermi la tua presenza? Grazie, {{studio}}.";
+  }
+  function imFillTemplate(tpl, vars){
+    return String(tpl||"").replace(/\{\{(\w+)\}\}/g, function(_,k){ return (vars[k]!==undefined && vars[k]!==null && vars[k]!=="") ? String(vars[k]) : ""; });
+  }
+  function imLeadMinutes(){ const n=parseInt(messagingSettings.leadMinutes,10); return n>0 ? n : 60; }
+  function imTplRenewal(){ return messagingSettings.tplRenewal || imDefaultTplRenewal(); }
+  function imTplReminderTxt(){ return messagingSettings.tplReminder || imDefaultTplReminder(); }
+  function imRenewalKey(p){
+    const pkg=p.package||{};
+    return (pkg.service||"")+"|"+(pkg.sessionsTotal||0);
+  }
+  function computeImRenewalQueue(){
+    const rows=[];
+    patients.forEach(function(p,id){
+      const pkg=p.package;
+      if(!pkg || !pkg.sessionsTotal) return;
+      const remaining=pkg.sessionsTotal-(pkg.sessionsUsed||0);
+      if(remaining<=0 || remaining>2) return;
+      const key=imRenewalKey(p);
+      if(p.imRenewalNotified && p.imRenewalNotified.key===key) return;
+      rows.push({id:id, patient:p, remaining:remaining, key:key});
+    });
+    rows.sort(function(a,b){ return a.remaining-b.remaining; });
+    return rows;
+  }
+  function computeImReminderQueue(){
+    const rows=[];
+    const now=new Date();
+    const todayIso=isoDate(now);
+    const lead=imLeadMinutes();
+    appts.forEach(function(a,key){
+      if(a.date!==todayIso || !a.time) return;
+      if(a.imReminderSent) return;
+      const dt=new Date(a.date+"T"+a.time+":00");
+      const minutesUntil=(dt-now)/60000;
+      if(minutesUntil>0 && minutesUntil<=lead){
+        rows.push({key:key, appt:a, minutesUntil:Math.round(minutesUntil)});
+      }
+    });
+    rows.sort(function(a,b){ return a.minutesUntil-b.minutesUntil; });
+    return rows;
+  }
+  function imRenewalMessage(p, remaining){
+    const pkg=p.package||{};
+    const firstName=(p.fullName||"").trim().split(/\s+/)[0]||"";
+    return imFillTemplate(imTplRenewal(), {nome:firstName, pacchetto:pkg.service||"il tuo percorso", rimanenti:remaining, studio:professionalName()});
+  }
+  function imReminderMessageTxt(a){
+    const d=new Date(a.date+"T00:00:00");
+    const dateLabel=d.toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"});
+    const firstName=(a.patientName||"").trim().split(/\s+/)[0]||"";
+    return imFillTemplate(imTplReminderTxt(), {nome:firstName, data:dateLabel, ora:a.time||"", studio:professionalName()});
+  }
+  async function markRenewalSent(patientId, key){
+    if(!db || !patientId) return;
+    try{ await db.collection("patients").doc(patientId).update({imRenewalNotified:{key:key||"", sentAt:new Date().toISOString()}}); }
+    catch(err){ /* best effort */ }
+  }
+  async function markReminderSent(apptKey){
+    if(!db || !apptKey) return;
+    try{ await db.collection("appointments").doc(apptKey).update({imReminderSent:{sentAt:new Date().toISOString()}}); }
+    catch(err){ /* best effort */ }
+  }
+  function renderImQueues(){
+    const leadLabelEl=document.getElementById("imLeadLabel");
+    if(leadLabelEl) leadLabelEl.textContent=String(imLeadMinutes());
+
+    const renEl=document.getElementById("imRenewalList");
+    if(renEl){
+      const rows=computeImRenewalQueue();
+      renEl.innerHTML = rows.length ? rows.map(function(r){
+        const p=r.patient;
+        const phone=p.phone||"", email=p.email||"";
+        const msg=imRenewalMessage(p, r.remaining);
+        const wa=phone?waHref(phone,msg):"";
+        const mail=email?("mailto:"+encodeURIComponent(email)+"?subject="+encodeURIComponent("Rinnovo pacchetto")+"&body="+encodeURIComponent(msg)):"";
+        const tag=escapeHtml(r.id+"|"+r.key);
+        return '<div class="reminder-row">'+
+          '<div class="rr-head"><span class="rr-who">'+escapeHtml(p.fullName||"")+'</span><span class="rr-when">'+r.remaining+' sedut'+(r.remaining===1?"a":"e")+' rimaste'+((p.package&&p.package.service)?(" · "+escapeHtml(p.package.service)):"")+'</span></div>'+
+          '<div class="rr-actions">'+
+            (wa?('<a class="btn btn-ghost" href="'+wa+'" target="_blank" rel="noopener" data-mark-renewal="'+tag+'">WhatsApp</a>'):'')+
+            (mail?('<a class="btn btn-ghost" href="'+mail+'" data-mark-renewal="'+tag+'">Email</a>'):'')+
+            '<button type="button" class="btn btn-ghost btn-small" data-mark-renewal-manual="'+tag+'">Segna come inviato</button>'+
+            ((!wa&&!mail)?'<span class="field-hint">Nessun contatto disponibile</span>':'')+
+          '</div></div>';
+      }).join("") : '<div class="reminder-empty">Nessun rinnovo da proporre al momento.</div>';
+      renEl.querySelectorAll("[data-mark-renewal]").forEach(function(el){
+        el.addEventListener("click", function(){
+          const i=el.dataset.markRenewal.indexOf("|");
+          markRenewalSent(el.dataset.markRenewal.slice(0,i), el.dataset.markRenewal.slice(i+1));
+        });
+      });
+      renEl.querySelectorAll("[data-mark-renewal-manual]").forEach(function(el){
+        el.addEventListener("click", function(){
+          const i=el.dataset.markRenewalManual.indexOf("|");
+          markRenewalSent(el.dataset.markRenewalManual.slice(0,i), el.dataset.markRenewalManual.slice(i+1));
+          showToast("Segnato come inviato.");
+        });
+      });
+    }
+
+    const remEl=document.getElementById("imReminderList");
+    if(remEl){
+      const rows=computeImReminderQueue();
+      remEl.innerHTML = rows.length ? rows.map(function(r){
+        const a=r.appt;
+        const patient=a.patientId?patients.get(a.patientId):null;
+        const phone=a.phone||(patient&&patient.phone)||"";
+        const email=(patient&&patient.email)||"";
+        const msg=imReminderMessageTxt(a);
+        const wa=phone?waHref(phone,msg):"";
+        const mail=email?("mailto:"+encodeURIComponent(email)+"?subject="+encodeURIComponent("Promemoria appuntamento")+"&body="+encodeURIComponent(msg)):"";
+        const tag=escapeHtml(r.key);
+        return '<div class="reminder-row">'+
+          '<div class="rr-head"><span class="rr-who">'+escapeHtml(a.patientName||"")+'</span><span class="rr-when">'+(a.time||"")+' · tra '+r.minutesUntil+' min</span></div>'+
+          '<div class="rr-actions">'+
+            (wa?('<a class="btn btn-ghost" href="'+wa+'" target="_blank" rel="noopener" data-mark-reminder="'+tag+'">WhatsApp</a>'):'')+
+            (mail?('<a class="btn btn-ghost" href="'+mail+'" data-mark-reminder="'+tag+'">Email</a>'):'')+
+            '<button type="button" class="btn btn-ghost btn-small" data-mark-reminder-manual="'+tag+'">Segna come inviato</button>'+
+            ((!wa&&!mail)?'<span class="field-hint">Nessun contatto disponibile</span>':'')+
+          '</div></div>';
+      }).join("") : '<div class="reminder-empty">Nessun promemoria da inviare in questo momento.</div>';
+      remEl.querySelectorAll("[data-mark-reminder]").forEach(function(el){
+        el.addEventListener("click", function(){ markReminderSent(el.dataset.markReminder); });
+      });
+      remEl.querySelectorAll("[data-mark-reminder-manual]").forEach(function(el){
+        el.addEventListener("click", function(){ markReminderSent(el.dataset.markReminderManual); showToast("Segnato come inviato."); });
+      });
+    }
+  }
+  setInterval(function(){
+    const imView=document.getElementById("imView");
+    if(db && imView && !imView.hidden) renderImQueues();
+  }, 60000);
+
+  // ---------- IM: impostazioni (anticipo promemoria e modelli di messaggio) ----------
+  function fillImSettingsForm(){
+    const leadEl=document.getElementById("imLeadMinutes");
+    const tplREl=document.getElementById("imTplRenewal");
+    const tplPEl=document.getElementById("imTplReminder");
+    if(!leadEl || !tplREl || !tplPEl) return;
+    leadEl.value=String(imLeadMinutes());
+    tplREl.value=messagingSettings.tplRenewal || imDefaultTplRenewal();
+    tplPEl.value=messagingSettings.tplReminder || imDefaultTplReminder();
+    const lbl=document.getElementById("imLeadLabel");
+    if(lbl) lbl.textContent=String(imLeadMinutes());
+  }
+  document.getElementById("imSettingsForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+    if(!db){ showBanner("Salvataggio non disponibile in questo contesto."); return; }
+    const payload={
+      leadMinutes: parseInt(document.getElementById("imLeadMinutes").value,10)||60,
+      tplRenewal: document.getElementById("imTplRenewal").value.trim() || imDefaultTplRenewal(),
+      tplReminder: document.getElementById("imTplReminder").value.trim() || imDefaultTplReminder(),
+      updatedAt: new Date().toISOString()
+    };
+    try{
+      await db.collection("settings").doc("messaging").set(payload);
+      showToast("Impostazioni messaggi salvate.");
+    }catch(err){ showBanner("Salvataggio impostazioni non riuscito (" + (err && err.code || "errore") + ")."); }
+  });
+
+  // ---------- IM: messaggi con immagini promozionali (broadcast) ----------
+  function compressImageFile(file, maxSide, quality){
+    return new Promise(function(resolve,reject){
+      const reader=new FileReader();
+      reader.onload=function(ev){
+        const img=new Image();
+        img.onload=function(){
+          const scale=Math.min(1, maxSide/Math.max(img.width,img.height));
+          const w=Math.round(img.width*scale), h=Math.round(img.height*scale);
+          const canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h;
+          canvas.getContext("2d").drawImage(img,0,0,w,h);
+          resolve(canvas.toDataURL("image/jpeg",quality));
+        };
+        img.onerror=reject;
+        img.src=ev.target.result;
+      };
+      reader.onerror=reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  let bcPhotos=[], editingBroadcastId=null;
+  function renderBcPhotos(){
+    const wrap=document.getElementById("bcPhotosWrap");
+    if(!wrap) return;
+    wrap.innerHTML = bcPhotos.map(function(src,i){
+      return '<span class="training-photo-thumb"><img src="'+src+'"><button type="button" data-rm="'+i+'">&times;</button></span>';
+    }).join("");
+    wrap.querySelectorAll("[data-rm]").forEach(function(b){
+      b.addEventListener("click", function(){ bcPhotos.splice(parseInt(b.dataset.rm,10),1); renderBcPhotos(); });
+    });
+  }
+  document.getElementById("bcAddPhotoBtn").addEventListener("click", function(){
+    if(bcPhotos.length>=3){ showToast("Massimo 3 immagini per messaggio."); return; }
+    document.getElementById("bcPhotoInput").click();
+  });
+  document.getElementById("bcPhotoInput").addEventListener("change", async function(e){
+    const file=e.target.files[0]; e.target.value="";
+    if(!file) return;
+    try{
+      const dataUrl=await compressImageFile(file, 900, 0.65);
+      bcPhotos.push(dataUrl);
+      renderBcPhotos();
+    }catch(err){ showToast("Impossibile caricare l'immagine."); }
+  });
+  function refreshBcPromoSelect(){
+    const sel=document.getElementById("bcSelectPromo");
+    const list=Array.from(promotions.entries()).sort(function(a,b){ return (a[1].title||"").localeCompare(b[1].title||""); });
+    sel.innerHTML='<option value="">— nessuna —</option>'+list.map(function(entry){
+      return '<option value="'+entry[0]+'">'+escapeHtml(entry[1].title||"")+'</option>';
+    }).join("");
+  }
+  document.getElementById("bcSelectPromo").addEventListener("change", function(){
+    const id=this.value;
+    if(!id) return;
+    const p=promotions.get(id);
+    if(!p) return;
+    if(!document.getElementById("bcTitle").value) document.getElementById("bcTitle").value=p.title||"";
+    const parts=[];
+    if(p.title) parts.push(p.title);
+    if(p.description) parts.push(p.description);
+    if(p.discount) parts.push("Vantaggio: "+p.discount);
+    document.getElementById("bcMessage").value = parts.join("\n");
+  });
+  function openBroadcastModal(id){
+    editingBroadcastId=id||null;
+    const data=id?broadcasts.get(id):null;
+    document.getElementById("broadcastModalTitle").textContent = id?"Modifica messaggio":"Nuovo messaggio";
+    refreshBcPromoSelect();
+    document.getElementById("bcSelectPromo").value="";
+    document.getElementById("bcTitle").value = data ? data.title||"" : "";
+    document.getElementById("bcMessage").value = data ? data.message||"" : "";
+    bcPhotos = data && data.images ? data.images.slice() : [];
+    renderBcPhotos();
+    document.getElementById("bcDeleteBtn").style.display = id?"inline-flex":"none";
+    document.getElementById("broadcastModalOverlay").hidden=false;
+  }
+  document.getElementById("newBroadcastBtn").addEventListener("click", function(){ openBroadcastModal(null); });
+  document.getElementById("bcCancelBtn").addEventListener("click", function(){ document.getElementById("broadcastModalOverlay").hidden=true; document.getElementById("broadcastForm").reset(); bcPhotos=[]; });
+  document.getElementById("broadcastModalOverlay").addEventListener("click", function(e){ if(e.target===e.currentTarget){ e.currentTarget.hidden=true; document.getElementById("broadcastForm").reset(); bcPhotos=[]; } });
+  document.getElementById("broadcastForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+    if(!db){ showBanner("Salvataggio non disponibile in questo contesto."); return; }
+    const payload={
+      title: document.getElementById("bcTitle").value.trim(),
+      message: document.getElementById("bcMessage").value.trim(),
+      images: bcPhotos.slice(),
+      updatedAt: new Date().toISOString()
+    };
+    try{
+      if(editingBroadcastId){ await db.collection("broadcasts").doc(editingBroadcastId).update(payload); }
+      else { await db.collection("broadcasts").add(payload); }
+      document.getElementById("broadcastModalOverlay").hidden=true;
+      document.getElementById("broadcastForm").reset(); bcPhotos=[];
+      showToast("Messaggio salvato.");
+    }catch(err){ showBanner("Salvataggio messaggio non riuscito (" + (err && err.code || "errore") + ")."); }
+  });
+  document.getElementById("bcDeleteBtn").addEventListener("click", async function(){
+    if(!db || !editingBroadcastId) return;
+    try{
+      await db.collection("broadcasts").doc(editingBroadcastId).delete();
+      document.getElementById("broadcastModalOverlay").hidden=true;
+      document.getElementById("broadcastForm").reset(); bcPhotos=[];
+    }catch(err){ showBanner("Eliminazione messaggio non riuscita (" + (err && err.code || "errore") + ")."); }
+  });
+  function renderBroadcastList(){
+    const el=document.getElementById("broadcastList");
+    if(!el) return;
+    const list=Array.from(broadcasts.entries()).sort(function(a,b){ return (b[1].updatedAt||"").localeCompare(a[1].updatedAt||""); });
+    if(!list.length){ el.innerHTML='<p style="color:var(--text-muted);font-size:12.5px;">Nessun messaggio creato. Crea il primo messaggio con testo e immagini promozionali.</p>'; return; }
+    el.innerHTML=list.map(function(entry){
+      const id=entry[0], b=entry[1];
+      const imgCount=(b.images||[]).length;
+      const preview=(b.message||"").slice(0,140)+((b.message||"").length>140?"…":"");
+      return '<div class="promo-card">'+
+        '<div><h4>'+escapeHtml(b.title||"")+'</h4>'+
+        (preview?('<p>'+escapeHtml(preview)+'</p>'):'')+
+        '<div class="promo-meta">'+imgCount+' immagine'+(imgCount===1?"":"i")+'</div></div>'+
+        '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">'+
+        '<button type="button" class="btn btn-primary btn-small" data-send-broadcast="'+id+'">Invia</button>'+
+        '<button type="button" class="btn btn-ghost btn-small" data-edit-broadcast="'+id+'">Modifica</button></div></div>';
+    }).join("");
+    el.querySelectorAll("[data-edit-broadcast]").forEach(function(b){ b.addEventListener("click", function(){ openBroadcastModal(b.dataset.editBroadcast); }); });
+    el.querySelectorAll("[data-send-broadcast]").forEach(function(b){ b.addEventListener("click", function(){ openBroadcastSend(b.dataset.sendBroadcast); }); });
+  }
+  let broadcastSendId=null;
+  function openBroadcastSend(id){
+    broadcastSendId=id;
+    const b=broadcasts.get(id);
+    if(!b) return;
+    document.getElementById("broadcastSendHint").textContent = (b.images&&b.images.length)
+      ? "WhatsApp ed email possono precompilare solo il testo: scarica le immagini qui sotto e allegale manualmente nel messaggio prima di inviarlo."
+      : "Scegli i pazienti a cui inviare questo messaggio.";
+    document.getElementById("broadcastSendSearch").value="";
+    renderBroadcastSendList("");
+    document.getElementById("broadcastSendOverlay").hidden=false;
+  }
+  function renderBroadcastSendList(filter){
+    const el=document.getElementById("broadcastSendList");
+    const b=broadcasts.get(broadcastSendId);
+    if(!b || !el) return;
+    const q=(filter||"").toLowerCase();
+    const rows=Array.from(patients.entries()).filter(function(entry){
+      return !q || (entry[1].fullName||"").toLowerCase().includes(q);
+    }).sort(function(a,b2){ return (a[1].fullName||"").localeCompare(b2[1].fullName||""); });
+    const imagesHtml=(b.images||[]).map(function(src,i){
+      return '<a class="btn btn-ghost btn-small" href="'+src+'" download="promo-immagine-'+(i+1)+'.jpg">Scarica immagine '+(i+1)+'</a>';
+    }).join(" ");
+    if(!rows.length){ el.innerHTML='<div class="reminder-empty">Nessun paziente trovato.</div>'; return; }
+    el.innerHTML = (imagesHtml?('<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;">'+imagesHtml+'</div>'):'') +
+      rows.map(function(entry){
+        const p=entry[1];
+        const phone=p.phone||"", email=p.email||"";
+        const wa=phone?waHref(phone,b.message||""):"";
+        const mail=email?("mailto:"+encodeURIComponent(email)+"?subject="+encodeURIComponent(b.title||"Promozione")+"&body="+encodeURIComponent(b.message||"")):"";
+        return '<div class="reminder-row"><div class="rr-head"><span class="rr-who">'+escapeHtml(p.fullName||"")+'</span></div>'+
+          '<div class="rr-actions">'+
+            (wa?('<a class="btn btn-ghost" href="'+wa+'" target="_blank" rel="noopener">WhatsApp</a>'):'')+
+            (mail?('<a class="btn btn-ghost" href="'+mail+'">Email</a>'):'')+
+            ((!wa&&!mail)?'<span class="field-hint">Nessun contatto disponibile</span>':'')+
+          '</div></div>';
+      }).join("");
+  }
+  document.getElementById("broadcastSendSearch").addEventListener("input", function(){ renderBroadcastSendList(this.value); });
+  document.getElementById("broadcastSendCloseBtn").addEventListener("click", function(){ document.getElementById("broadcastSendOverlay").hidden=true; });
+  document.getElementById("broadcastSendOverlay").addEventListener("click", function(e){ if(e.target===e.currentTarget) e.currentTarget.hidden=true; });
 
   // ---------- calendar navigation ----------
   document.getElementById("prevWeek").addEventListener("click", function(){
